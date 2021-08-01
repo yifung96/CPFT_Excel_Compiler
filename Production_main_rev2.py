@@ -17,7 +17,7 @@ if not os.path.exists('ResultFolder\\Prod_Data'):
 
 #################################   Change Setting here   #############################################
 filename = 'testfile.xlsx'
-sheetname = 'FF' 
+sheetname = 'CP' 
 #   [1: CP Analysis|| 2: BoxPlot]
 mode = 1
 #######################################################################################################
@@ -43,10 +43,18 @@ resFile = resPath+'\\Summary.xlsx'
 #   Convert Excel sheet to Dataframe
 testDF = pd.read_excel(filePath,sheet_name = sheetname)
 print("Datalog Dimension: ",testDF.shape)
-datDict,topParam = func.extractData(testDF,fileParam,checkKw)
+fileDat = func.extractData(testDF,fileParam,checkKw)
 resBook = pd.ExcelWriter(resFile, engine = 'xlsxwriter')
-dataDF,bplimit = func.storeData(datDict,topParam,resBook)
+sd = func.storeData(fileDat.dataDict,fileDat.topParam,resBook)
 print("Complete Compilation -> Processing Plots")
+
+##  Plots 
+func.plots(mode,fileDat.dataDict,fileParam,resBook,resPath,sd.dataDF,sd.bplimit)
+ElapsedTime = round(float(time.time()-t0),2)
+print("Time elapsed: ", ElapsedTime,"s")
+
+print("Plot Complete")
+
 
 
 

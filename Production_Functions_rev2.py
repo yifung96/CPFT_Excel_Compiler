@@ -4,19 +4,20 @@ Created on Sat Jul 24 11:16:07 2021
 
 @author: USER
 """
+
 import pandas as pd
-import matplotlib.pyplot as plt
-import statistics as stat
 import numpy as np
+import statistics as stat
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy import stats
 
 class extractData(object):
     def __init__(self,testDF,fileParam,checkKw):
         self.testDF = testDF
         self.fileParam = fileParam
         self.checkKw = checkKw
-        datDict,topParam = self.run(self.testDF,self.fileParam,self.checkKw)
-        self.datDict = datDict
-        self.topParam = topParam
+        self.run(self.testDF,self.fileParam,self.checkKw)
         
     def run(self,testDF,fileParam,checkKw):
         ##  Extract Data from DataFrame
@@ -41,7 +42,6 @@ class extractData(object):
             else:
                 usl = testDF.iloc[fileParam[1],col]
                 lsl = testDF.iloc[fileParam[2],col]
-                
                 if pd.isna(usl):
                     continue
                 else:
@@ -86,18 +86,17 @@ class extractData(object):
                             datDict[parType][parName]['Data'] = testDF.iloc[fileParam[4]:maxRow-2,col] 
                     else:
                         continue
-        return datDict,topParam        
- 
+        self.dataDict = datDict
+        self.topParam = topParam
+        
 class storeData(object):
     def __init__(self,datDict,topParam,resBook):
         self.datDict = datDict
         self.topParam = topParam
         self.resBook = resBook
-        dataDF,bplimit = self.run(self.datDict,self.topParam,self.resBook)
-        self.dataDF = dataDF
-        self.bplimit = bplimit
+        self.run(self.datDict,self.topParam,self.resBook)
     
-    def run(datDict,topParam,resBook):
+    def run(self,datDict,topParam,resBook):
         # Data Sheet
         copyDict = {}
         bplimit = {}
@@ -112,18 +111,25 @@ class storeData(object):
                 
         dataDF = pd.DataFrame(copyDict)
         dataDF.to_excel(resBook, sheet_name = "Datalog")
+        self.dataDF = dataDF
+        self.bplimit = bplimit
         
-        return dataDF,bplimit
-    
 class plots(object):
-    def __init__(self,mode,datDict,fileParam):
+    def __init__(self,mode,datDict,fileParam,resBook,resPath,dataDF,bplimit):
+        self.resBook = resBook
         self.mode = mode
         self.datDict = datDict
         self.fileParam = fileParam
+        self.resPath = resPath
         if self.mode == 1:
-            self.datDict = self.capAnalyse(self.datDict,self.fileParam)
+            self.datDict = self.capAnalyse(self.datDict,self.fileParam,self.resBook)
+            self.plotCA(self.datDict,self.resBook,self.resPath)
+        else:
+            self.dataDF = dataDF
+            self.bplimit = bplimit
+            self.plotBoxplot(self.dataDF,self.bplimit,self.resBook,self.resPath)
     
-    def capAnalyse(self,datDict,fileData):
+    def capAnalyse(self,datDict,fileData,resBook):
         ## To calculate (Lsl,Usl,Mean,StdDev Within,StdDev Overall,CPL,CPU,CPK,PPL,PPU,PPK) 
         rnd = 5 #Round Off
         sig = fileData[6]
@@ -164,3 +170,118 @@ class plots(object):
         resDF.to_excel(resBook, sheet_name = "CASummary")
         
         return datDict
+    
+    def plotCA(self,datDict,resBook,resPath):
+        # Plot Capability Graph
+        i = 2
+        j = 2
+        worksheet = resBook.sheets["CASummary"]
+        for items in datDict:
+            for name in datDict[items]:
+                imgcell = "R"+str(i)
+                linkcell = "A"+str(j)
+                urlcell = "U"+str(i+5)
+                img = resPath+'\\CP_Plots'+str(j)+'.png'
+                #worksheet = resBook.sheets["CASummary"]
+                # Generate probability density function 
+                dataset = list(datDict[items][name]['Data'].values)
+                Lsl = datDict[items][name]['Par']['Lsl']
+                Usl = datDict[items][name]['Par']['Usl']
+                unit = datDict[items][name]['Par']['Unit']
+                stDev = datDict[items][name]['Par']['StDev_Overall']
+                # Methods to find bin size [Scotts, Freedman, Sturge]
+                calc_bin = self.scotts(dataset,stDev)
+                #calc_bin = self.freedman_diaconis(Lsl,Usl,dataset)
+                #calc_bin = self.sturge(dataset)
+                print(name,"",calc_bin)
+                if calc_bin == 0:
+                    continue
+                else:
+                    # Plot Histogram
+                    plt.hist(dataset, bins=calc_bin, color="lightgrey", edgecolor="grey", density=True)
+                    sns.kdeplot(dataset, color='black',label="Density")
+                    plt.axvline(Lsl, linestyle="--", color="red", label="LSL")
+                    plt.axvline(Usl, linestyle="--", color="orange", label="USL")
+                    plt.title(name)
+                    plt.xlabel("")
+                    plt.ylabel(unit)    
+                    plt.legend()
+                    plt.savefig(img)
+                    #plt.show()
+                    worksheet.insert_image(imgcell,img)
+                    # Insert Link
+                    worksheet.write_url(linkcell,"internal:'CASummary'!"+urlcell,string="Link")
+                    i+=20
+                    j+=1
+                    plt.close()
+        resBook.save()
+        
+    def freedman_diaconis(self,Lsl,Usl,dataset):
+        ## Often will have too many Bins
+        N = len(dataset)
+        IQR  = stats.iqr(dataset, rng=(25, 75), scale=1, nan_policy="omit")
+        bw = (2*IQR)/np.power(N,1/3)
+        print(max(dataset),min(dataset),IQR,bw)
+        if bw == 0:
+            calc_bin = 10
+        else:
+            calc_bin = int((max(dataset)-min(dataset))/bw)
+        return calc_bin
+
+    def sturge(self,dataset):
+        ## Good for N<30
+        N = len(dataset)
+        calc_bin = int(np.ceil(np.log2(N) + 1))
+        return calc_bin
+
+    def scotts(self,dataset,stDev):
+        N = len(dataset)
+        bw = (3.49*stDev)/np.power(N,1/3)
+        calc_bin = int((max(dataset)-min(dataset))/bw)
+        return calc_bin
+    
+    def plotBoxplot(self,dataDF,bplimit,resBook,resPath):
+        tmpDF = (pd.DataFrame(bplimit)).transpose()
+        tmpDF.to_excel(resBook, sheet_name = "BPSummary")
+        #   Plot Boxplot
+        startplot_ind = False
+        startplot_kw = 'VDDIO'
+        k = 2
+        l = 2
+        worksheet = resBook.sheets["BPSummary"]
+        for col in dataDF:
+            if col == startplot_kw:
+                startplot_ind = True
+            elif startplot_ind:
+                #   Declare parameters
+                vddacell = "G"+str(k)
+                vddiocell = "P"+str(k)
+                linkcell = "D"+str(l)
+                urlcell = "O"+str(k+10)
+                vddaimg = resPath+'\\VDDA_Plots'+str(l)+'.png'
+                vddioimg = resPath+'\\VDDIO_Plots'+str(l)+'.png'
+                
+                print(col)
+                usl = bplimit[col]['Usl']
+                lsl = bplimit[col]['Lsl']
+                #   Process VDDA Boxplot
+                vdda_bp = dataDF.boxplot(column=col,by=['Skew','Temp','VDDA'],grid=False, rot=90, fontsize=8)
+                vdda_bp.axhline(usl, linestyle="--", color="black", label="Usl")
+                vdda_bp.axhline(lsl, linestyle="--", color="black", label="Lsl")
+                plt.suptitle("")
+                plt.savefig(vddaimg,bbox_inches='tight')
+                worksheet.insert_image(vddacell,vddaimg)
+                #   Process VDDIO Boxplot
+                vddio_bp = dataDF.boxplot(column=col,by=['Skew','Temp','VDDIO'],grid=False, rot=90, fontsize=8)
+                vddio_bp.axhline(usl, linestyle="--", color="black", label="Usl")
+                vddio_bp.axhline(lsl, linestyle="--", color="black", label="Lsl")
+                plt.suptitle("")
+                plt.savefig(vddioimg,bbox_inches='tight')
+                worksheet.insert_image(vddiocell,vddioimg)
+                #   Insert Links
+                worksheet.write_url(linkcell,"internal:'BPSummary'!"+urlcell,string="Link")
+                k+=22
+                l+=1
+            else:
+                continue
+        resBook.save()
