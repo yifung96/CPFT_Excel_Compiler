@@ -2,7 +2,7 @@
 """
 Created on Sat Jul 24 11:16:07 2021
 
-@author: USER
+@author: YF
 """
 
 import pandas as pd
@@ -115,15 +115,19 @@ class storeData(object):
         self.bplimit = bplimit
         
 class plots(object):
-    def __init__(self,mode,datDict,fileParam,resBook,resPath,dataDF,bplimit):
+    def __init__(self,mode,dataDict,fileParam,resBook,resPath,dataDF,bplimit,mtb):
         self.resBook = resBook
         self.mode = mode
-        self.datDict = datDict
+        self.datDict = dataDict
         self.fileParam = fileParam
         self.resPath = resPath
+        self.mtb = mtb
         if self.mode == 1:
             self.datDict = self.capAnalyse(self.datDict,self.fileParam,self.resBook)
-            self.plotCA(self.datDict,self.resBook,self.resPath)
+            if self.mtb:
+                self.plotCA2(self.datDict,self.resBook)
+            else:
+                self.plotCA(self.datDict,self.resBook,self.resPath)
         else:
             self.dataDF = dataDF
             self.bplimit = bplimit
@@ -285,3 +289,100 @@ class plots(object):
             else:
                 continue
         resBook.save()
+        
+    def plotCA2(self,datDict,resBook):
+        # Plot Capability Graph
+        i = 2
+        j = 2
+        worksheet = resBook.sheets["CASummary"]
+        for items in datDict:
+            for name in datDict[items]:
+                linkcell = "A"+str(j)
+                urlcell = "U"+str(i+5)
+                # Insert Link
+                worksheet.write_url(linkcell,"internal:'CASummary'!"+urlcell,string="Link")
+                i+=20
+                j+=1
+        resBook.save()
+        
+class mtb_cmd(object):
+    def __init__(self,dataDict,mode,resPath):
+        self.mode = mode
+        self.dataDict = dataDict
+        self.resPath = resPath
+        if self.mode == 1:
+            self.mtb_cmd1(self.dataDict,self.resPath)
+        else:
+            self.mtb_cmd2(self.dataDict,self.resPath)
+            self.mtb_cmd3(self.dataDict,self.resPath)
+            
+    def mtb_cmd1(self,dataDict,resPath):
+        #   Write commands to textfile
+        lines = []
+        for items in dataDict:
+            for name in dataDict[items]:
+                #   Get required data
+                Lsl = dataDict[items][name]['Par']['Lsl']
+                Usl = dataDict[items][name]['Par']['Usl']
+                N = len(list(dataDict[items][name]['Data'].values))
+                #   Write into excel
+                lines.append("MTB > Capa " +"'"+name+"' "+str(N)+";")
+                lines.append("SUBC> Lspec "+str(Lsl)+";")
+                lines.append("SUBC> Uspec "+str(Usl)+";")
+                lines.append("SUBC> Pooled;")
+                lines.append("SUBC> AMR;")
+                lines.append("SUBC> UnBiased;")
+                lines.append("SUBC> OBiased;")
+                lines.append("SUBC> Toler 6;")
+                lines.append("SUBC> Within;")
+                lines.append("SUBC> Overall;")
+                lines.append("SUBC> CStat;")
+                lines.append("SUBC> GSAVE "+'"'+name+'"'+";")
+                lines.append("SUBC> PNGH.")
+        cmd = open(resPath+'\\cmd.txt',"w")
+        for line in lines:
+            cmd.write(line+"\n")
+        cmd.close()   
+
+    def mtb_cmd2(self,dataDict,resPath):
+        #   Write commands to textfile
+        lines = []
+        for items in dataDict:
+            for name in dataDict[items]:
+                #   Get required data
+                Lsl = dataDict[items][name]['Par']['Lsl']
+                Usl = dataDict[items][name]['Par']['Usl']
+                #N = len(list(datDict[items][name]['Data'].values))
+                #   Write into excel
+                lines.append("MTB > Boxplot " +"('"+name+"') * Skew"+";")
+                lines.append("SUBC> Group Temp VDDIO"+";")
+                lines.append("SUBC> Overlay"+";")
+                lines.append("SUBC> Reference 2 "+str(Usl)+" "+str(Lsl)+";")
+                lines.append("SUBC> IQRBox;")
+                lines.append("SUBC> Outlier.")
+        cmd = open(resPath+'\\VDDIO_cmd.txt',"w")
+        for line in lines:
+            cmd.write(line+"\n")
+        cmd.close()
+        
+    def mtb_cmd3(self,dataDict,resPath):
+        #   Write commands to textfile
+        lines = []
+        for items in dataDict:
+            for name in dataDict[items]:
+                #   Get required data
+                Lsl = dataDict[items][name]['Par']['Lsl']
+                Usl = dataDict[items][name]['Par']['Usl']
+                #N = len(list(datDict[items][name]['Data'].values))
+                #   Write into excel
+                lines.append("MTB > Boxplot " +"('"+name+"') * Skew"+";")
+                lines.append("SUBC> Group Temp VDDA"+";")
+                lines.append("SUBC> Overlay"+";")
+                lines.append("SUBC> Reference 2 "+str(Usl)+" "+str(Lsl)+";")
+                lines.append("SUBC> IQRBox;")
+                lines.append("SUBC> Outlier.")
+        cmd = open(resPath+'\\VDDA_cmd.txt',"w")
+        for line in lines:
+            cmd.write(line+"\n")
+        cmd.close()        
+        

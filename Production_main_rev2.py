@@ -2,7 +2,7 @@
 """
 Created on Thu Jul 22 20:38:46 2021
 
-@author: USER
+@author: YF
 """
 import os
 import time
@@ -14,12 +14,15 @@ if not os.path.exists('DataFolder\\Prod_Data'):
     os.makedirs('DataFolder\\Prod_Data')
 if not os.path.exists('ResultFolder\\Prod_Data'):
     os.makedirs('ResultFolder\\Prod_Data')
+if not os.path.exists('ResultFolder\\Prod_Data\\Plots'):
+    os.makedirs('ResultFolder\\Prod_Data\\Plots')
 
 #################################   Change Setting here   #############################################
 filename = 'testfile.xlsx'
 sheetname = 'CP' 
 #   [1: CP Analysis|| 2: BoxPlot]
 mode = 1
+mtb = False
 #######################################################################################################
 
 ##  Initiate Time
@@ -49,11 +52,15 @@ sd = func.storeData(fileDat.dataDict,fileDat.topParam,resBook)
 print("Complete Compilation -> Processing Plots")
 
 ##  Plots 
-func.plots(mode,fileDat.dataDict,fileParam,resBook,resPath,sd.dataDF,sd.bplimit)
+func.plots(mode,fileDat.dataDict,fileParam,resBook,resPath,sd.dataDF,sd.bplimit,mtb)
+print("Complete Plots")
+
+if mtb:
+    func.mtb_cmd(fileDat.dataDict,mode,resPath)
+
 ElapsedTime = round(float(time.time()-t0),2)
 print("Time elapsed: ", ElapsedTime,"s")
-
-print("Plot Complete")
+print("Process Complete")
 
 
 
